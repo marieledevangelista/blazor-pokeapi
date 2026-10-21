@@ -1,0 +1,80 @@
+@page "/"
+@inject HttpClient Http
+@using System.Net
+@using System.Globalization
+
+<PageTitle>Buscar Pokémon</PageTitle>
+<h1>Buscar Pokémon</h1>
+
+<label for="pokemonName">Nome do Pokémon:</label>
+<input id="pokemonName" class="form-input" @bind="nomePokemon" @bind:event="oninput" placeholder="Ex.: pikachu" />
+<button class="search-button" @onclick="BuscarPokemon" disabled="@carregando">@(carregando ? "Buscando..." : "Buscar Pokémon")</button>
+
+@if (!string.IsNullOrWhiteSpace(erro))
+{
+    <p class="error" role="alert">@erro</p>
+}
+
+@if (pokemon is not null)
+{
+    <hr />
+    <h2>Detalhes do Pokémon</h2>
+    @if (!string.IsNullOrWhiteSpace(pokemon.Sprites?.Other?.OfficialArtwork?.FrontDefault))
+    {
+        <img class="pokemon-image" src="@pokemon.Sprites.Other.OfficialArtwork.FrontDefault" alt="Imagem oficial de @pokemon.Name" />
+    }
+    else
+    {
+        <p>Imagem oficial não disponível.</p>
+    }
+    <p><strong>ID:</strong> @pokemon.Id</p>
+    <p><strong>Nome:</strong> @pokemon.Name</p>
+    <p><strong>Altura:</strong> @((pokemon.Height / 10.0).ToString("0.##", new CultureInfo("pt-BR"))) m</p>
+    <p><strong>Peso:</strong> @((pokemon.Weight / 10.0).ToString("0.##", new CultureInfo("pt-BR"))) kg</p>
+}
+
+@code {
+    private string nomePokemon = string.Empty;
+    private Pokemon? pokemon;
+    private string erro = string.Empty;
+    private bool carregando;
+
+    private async Task BuscarPokemon()
+    {
+        pokemon = null;
+        erro = string.Empty;
+        var nome = nomePokemon.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(nome))
+        {
+            erro = "Digite o nome de um Pokémon para pesquisar.";
+            return;
+        }
+
+        carregando = true;
+        try
+        {
+            using var resposta = await Http.GetAsync($"https://pokeapi.co/api/v2/pokemon/{Uri.EscapeDataString(nome)}");
+            if (resposta.StatusCode == HttpStatusCode.NotFound)
+            {
+                erro = "Pokémon não encontrado. Confira o nome digitado.";
+                return;
+            }
+            resposta.EnsureSuccessStatusCode();
+            pokemon = await resposta.Content.ReadFromJsonAsync<Pokemon>();
+            if (pokemon is null)
+                erro = "A API não retornou dados para esse Pokémon.";
+        }
+        catch (HttpRequestException)
+        {
+            erro = "Não foi possível consultar a PokéAPI. Verifique a conexão com a internet.";
+        }
+        catch (Exception)
+        {
+            erro = "Ocorreu um erro ao carregar o Pokémon.";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+}
